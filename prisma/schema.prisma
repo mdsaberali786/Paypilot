@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum AuditAction {
+  ORDER_CREATED
+  ORDER_UPDATED
+  PAYMENT_INITIATED
+  PAYMENT_COMPLETED
+  PAYMENT_FAILED
+  PAYMENT_RETRY_INITIATED
+  PAYMENT_RECOVERY_SUCCESS
+  PAYMENT_RECOVERY_FAILED
+  PAYMENT_VERIFICATION_FAILED
+  PAYMENT_REFUNDED
+  WEBHOOK_REPLAY_IGNORED
+  INVENTORY_RECOVERY_TRIGGERED
+  PRODUCT_RECOMMENDED
+  AGENT_DECISION
+  SYSTEM_ERROR
+}
+
+model Merchant {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products  Product[]
+  orders    Order[]
+  auditLogs AuditLog[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  merchantId  String
+  name        String
+  description String
+  price       Decimal  @db.Decimal(10, 2)
+  currency    String   @default("INR")
+  category    String
+  inventory   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  merchant    Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+
+  @@index([merchantId])
+  @@index([category])
+  @@index([active])
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  merchantId  String
+  checkoutKey String?     @unique
+  customerId  String?
+  status      OrderStatus @default(PENDING)
+  totalAmount Decimal     @db.Decimal(10, 2)
+  currency    String      @default("INR")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  merchant    Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+  payments    Payment[]
+  auditLogs   AuditLog[]
+
+  @@index([merchantId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  productId  String
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(10, 2)
+
+  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  orderId           String
+  provider          String        @default("razorpay")
+  providerOrderId   String?       @unique
+  providerPaymentId String?       @unique
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  failureReason     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@index([providerPaymentId])
+}
+
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  provider  String
+  eventId   String   @unique
+  processedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([provider])
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  merchantId String
+  orderId   String?
+  action    AuditAction
+  reason    String?
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  merchant  Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  order     Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([merchantId])
+  @@index([orderId])
+  @@index([action])
+  @@index([createdAt])
+}
