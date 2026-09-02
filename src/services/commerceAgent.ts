@@ -95,7 +95,9 @@ export async function runGeminiToolLoop(client: GeminiInteractionsClient, messag
     }
     console.log('AI_AGENT', { event: 'function_result_submitting', iteration, resultCount: results.length })
     console.log('AI_AGENT', { event: 'gemini_request', iteration: iteration + 1, hasPreviousInteraction: Boolean(interaction.id) })
-    interaction = await client.interactions.create({ model, previous_interaction_id: interaction.id, input: results })
+    console.log('AI_AGENT', { event: 'gemini_followup_request_started', iteration })
+    interaction = await client.interactions.create({ model, previous_interaction_id: interaction.id, input: results, system_instruction: instructions, tools: geminiToolDefinitions })
+    console.log('AI_AGENT', { event: 'gemini_followup_response_received', iteration, interactionId: interaction.id })
     console.log('AI_AGENT', {
       event: 'gemini_response',
       iteration: iteration + 1,
