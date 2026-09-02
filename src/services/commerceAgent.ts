@@ -63,22 +63,50 @@ function functionCalls(interaction: GeminiInteraction) {
 
 export async function runGeminiToolLoop(client: GeminiInteractionsClient, messages: AgentMessage[], context: AgentContext, executeTool: ToolExecutor = executeAgentTool) {
   const model = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
+  console.log('AI_AGENT', { event: 'agent_request_started' })
+  console.log('AI_AGENT', { event: 'gemini_request', iteration: 0, hasPreviousInteraction: false })
   let interaction = await client.interactions.create({ model, input: conversationInput(messages), system_instruction: instructions, tools: geminiToolDefinitions })
   const actions: AgentAction[] = []
+  console.log('AI_AGENT', {
+    event: 'gemini_response',
+    iteration: 0,
+    interactionId: interaction.id,
+    stepCount: Array.isArray(interaction.steps) ? interaction.steps.length : 0,
+    hasOutputText: typeof interaction.output_text === 'string' && interaction.output_text.length > 0,
+    functionCallStepCount: Array.isArray(interaction.steps) ? interaction.steps.filter((step) => step?.type === 'function_call').length : 0,
+  })
 
   for (let iteration = 0; iteration < 6; iteration += 1) {
     const calls = functionCalls(interaction)
-    if (calls.length === 0) return { message: extractInteractionText(interaction) || 'How can I help you find the right product?', actions }
+    if (calls.length === 0) {
+      console.log('AI_AGENT', { event: 'final_response_obtained', iteration, interactionId: interaction.id })
+      console.log('AI_AGENT', { event: 'tool_loop_exited', iteration, reason: 'final_response' })
+      return { message: extractInteractionText(interaction) || 'How can I help you find the right product?', actions }
+    }
 
     const results = []
     for (const call of calls) {
+      console.log('AI_AGENT', { event: 'tool_execution_started', iteration, tool: call.name, functionCallId: call.id })
       const args = call.arguments !== null && typeof call.arguments === 'object' && !Array.isArray(call.arguments) ? call.arguments : {}
       const action = await executeTool(call.name, args, context)
       actions.push(action)
+      console.log('AI_AGENT', { event: 'tool_execution_completed', iteration, tool: call.name, status: action.status })
       results.push({ type: 'function_result', call_id: call.id, name: call.name, result: JSON.stringify(action), is_error: action.status === 'blocked' })
     }
+    console.log('AI_AGENT', { event: 'function_result_submitting', iteration, resultCount: results.length })
+    console.log('AI_AGENT', { event: 'gemini_request', iteration: iteration + 1, hasPreviousInteraction: Boolean(interaction.id) })
     interaction = await client.interactions.create({ model, previous_interaction_id: interaction.id, input: results })
+    console.log('AI_AGENT', {
+      event: 'gemini_response',
+      iteration: iteration + 1,
+      interactionId: interaction.id,
+      stepCount: Array.isArray(interaction.steps) ? interaction.steps.length : 0,
+      hasOutputText: typeof interaction.output_text === 'string' && interaction.output_text.length > 0,
+      functionCallStepCount: Array.isArray(interaction.steps) ? interaction.steps.filter((step) => step?.type === 'function_call').length : 0,
+    })
   }
+  console.log('AI_AGENT', { event: 'tool_loop_limit_reached', iteration: 6 })
+  console.log('AI_AGENT', { event: 'tool_loop_exited', iteration: 6, reason: 'iteration_limit' })
   throw new Error('The assistant reached its tool-call limit. Please try again.')
 }
 
