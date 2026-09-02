@@ -12,6 +12,12 @@ type AgentAction = { tool: string; status: 'success' | 'blocked'; data?: unknown
 type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string; products?: Product[] }
 type CartSummary = { items: CartLine[]; total: number; currency: string; cartKey: string }
 
+export function shouldSurfaceBlockedToolError(actions: AgentAction[], assistantMessage?: string) {
+  const blocked = actions.find((action) => action.status === 'blocked')
+  if (!blocked?.message) return false
+  return !assistantMessage || !assistantMessage.trim()
+}
+
 function actionLabel(input: string) {
   const value = input.toLowerCase()
   if (/add|cart/.test(value)) return 'Adding to cart...'
@@ -74,7 +80,7 @@ export default function AssistantExperience() {
       const assistantContent = result.message
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: 'assistant', content: assistantContent, products }])
       const blocked = actions.find((action) => action.status === 'blocked')
-      if (blocked?.message) setError(blocked.message)
+      if (blocked?.message && shouldSurfaceBlockedToolError(actions, assistantContent)) setError(blocked.message)
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'A network error occurred. Please try again.')
     } finally {

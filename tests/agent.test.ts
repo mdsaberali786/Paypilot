@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { shouldSurfaceBlockedToolError } from '../src/components/assistant/AssistantExperience'
 import { validateAgentRequest } from '../src/services/agentRequest'
 import { validateAgentToolArguments } from '../src/services/agentTools'
 import { AgentSessionStore } from '../src/services/agentSession'
@@ -35,6 +36,13 @@ test('Gemini tool-call loop executes returned function calls and returns results
 test('Gemini provider failures reach the server error boundary', async () => {
   const client: GeminiInteractionsClient = { interactions: { create: async () => { throw new Error('provider unavailable') } } }
   await assert.rejects(() => runGeminiToolLoop(client, [{ role: 'user', content: 'Hello' }], { cart: [], confirmed: false, checkoutKey: 'checkout-key' }), /provider unavailable/)
+})
+
+test('blocked tool errors are hidden when the assistant still returns a final response', () => {
+  const actions = [{ tool: 'search_products', status: 'blocked' as const, message: 'A search query is required.' }]
+  assert.equal(shouldSurfaceBlockedToolError(actions, 'Here are some tables under ₹5,000.'), false)
+  assert.equal(shouldSurfaceBlockedToolError(actions, ''), true)
+  assert.equal(shouldSurfaceBlockedToolError(actions, '   '), true)
 })
 
 test('add_to_cart requires a product ID and positive integer quantity', () => {
