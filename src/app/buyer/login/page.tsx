@@ -26,7 +26,8 @@ export default function BuyerLoginPage() {
       })
       const result = await response.json() as { error?: string }
       if (!response.ok) throw new Error(result.error || 'Unable to authenticate.')
-      router.push('/shop')
+      const next = new URLSearchParams(window.location.search).get('next')
+      router.push(next && next.startsWith('/') && !next.startsWith('//') ? next : '/shop')
       router.refresh()
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to authenticate.')
