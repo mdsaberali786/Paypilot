@@ -18,8 +18,8 @@ The application is built as a monolithic Next.js application with a clear separa
 - **Frontend**: Next.js 16 with TypeScript and Tailwind CSS
 - **Backend**: Next.js API routes and server-side services
 - **Database**: PostgreSQL with Prisma ORM
-- **AI**: Configurable LLM provider (for future implementation)
-- **Payments**: Razorpay Test Mode (for future implementation)
+- **AI**: Gemini-powered commerce assistant with audited tool calls
+- **Payments**: Razorpay Test Mode with server-side verification and retry recovery
 
 ### Project Structure
 
@@ -124,6 +124,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - **/dashboard/products** - Product management
 - **/dashboard/orders** - Order tracking and management
 - **/dashboard/activity** - AI agent decisions and audit logs
+- **/dashboard/growth** - Merchant-scoped conversion analytics and generated growth insights
 
 ## Database Schema
 
@@ -154,7 +155,7 @@ The application uses the following main entities:
 
 ## Current Implementation Status
 
-### ✅ Completed (Foundation Phase)
+### ✅ Completed
 - Next.js + TypeScript project setup
 - Tailwind CSS configuration
 - Prisma + PostgreSQL configuration
@@ -166,20 +167,18 @@ The application uses the following main entities:
 - Merchant dashboard (overview, products, orders, activity)
 - Environment variable configuration
 - Basic validation and error handling
+- Buyer and seller authentication with merchant-scoped authorization
+- Gemini agentic commerce tools and merchant-correct AI audit attribution
+- Razorpay Test Mode verification, webhook idempotency, and ownership-hardened payment APIs
+- Merchant growth analytics, product performance, and sanitized on-demand insights
 
 ### 🔜 Future Implementation
-- AI agent integration with LLM
-- Razorpay payment integration
-- Shopping cart functionality
-- Customer authentication
-- Order placement flow
 - Real-time payment status updates
-- Advanced analytics and reporting
+- Advanced analytics and reporting beyond the current 7/30-day seller view
 
 ## Notes
 
-- This is a foundation-only implementation. No AI or payment integration is included yet.
-- The demo merchant context is used for MVP development (full authentication system not implemented).
+- Growth insight generation uses a best-effort in-memory cooldown per seller instance; serverless restarts or multiple instances can reset it.
 - All functionality is database-driven; no hardcoded data where it should come from the database.
 - The application uses a clean, professional UI suitable for a fintech/AI product.
 

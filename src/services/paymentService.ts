@@ -8,6 +8,16 @@ type RecoveryAuditAction = AuditAction
 
 export class PaymentValidationError extends Error {}
 
+export function canAccessPaymentOrder(orderBuyerId: string | null | undefined, buyerId: string | undefined) {
+  return buyerId === undefined || (Boolean(buyerId) && orderBuyerId === buyerId)
+}
+
+function assertPaymentOrderOwnership(order: { buyerId?: string | null }, buyerId?: string) {
+  if (!canAccessPaymentOrder(order.buyerId, buyerId)) {
+    throw new PaymentValidationError('Payment does not belong to this account.')
+  }
+}
+
 function razorpayClient(): RazorpayOrderClient {
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) throw new PaymentValidationError('Payment service is not configured.')
   return new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET }) as unknown as RazorpayOrderClient
@@ -95,9 +105,10 @@ export async function createRazorpayOrder(paypilotOrderId: string) {
   return { paypilotOrderId: order.id, providerOrderId: providerOrder.id, amount, currency: order.currency, keyId: process.env.RAZORPAY_KEY_ID! }
 }
 
-export async function retryRazorpayPayment(paypilotOrderId: string) {
+export async function retryRazorpayPayment(paypilotOrderId: string, buyerId?: string) {
   const order = await prisma.order.findUnique({ where: { id: paypilotOrderId }, include: { payments: true } })
   if (!order) throw new PaymentValidationError('Order not found.')
+  assertPaymentOrderOwnership(order, buyerId)
   if (order.currency !== 'INR') throw new PaymentValidationError('Only INR payments are supported.')
   if (order.status === 'CANCELLED' || order.status === 'REFUNDED') throw new PaymentValidationError('This order is not available for payment.')
 
@@ -135,8 +146,11 @@ async function markCaptured(providerOrderId: string, providerPaymentId: string, 
   return result
 }
 
-export async function verifyRazorpayPayment(input: { paypilotOrderId: string; providerOrderId: string; providerPaymentId: string; signature: string }) {
+export async function verifyRazorpayPayment(input: { paypilotOrderId: string; providerOrderId: string; providerPaymentId: string; signature: string; buyerId?: string }) {
   if (!process.env.RAZORPAY_KEY_SECRET) throw new PaymentValidationError('Payment service is not configured.')
+  const order = await prisma.order.findUnique({ where: { id: input.paypilotOrderId } })
+  if (!order) throw new PaymentValidationError('Order not found.')
+  assertPaymentOrderOwnership(order, input.buyerId)
   const payment = await prisma.payment.findUnique({ where: { providerOrderId: input.providerOrderId }, include: { order: true } })
   if (!payment || payment.orderId !== input.paypilotOrderId || payment.provider !== 'razorpay') throw new PaymentValidationError('Payment does not match this order.')
   if (payment.status === 'COMPLETED') return { order: payment.order, payment, duplicate: true }

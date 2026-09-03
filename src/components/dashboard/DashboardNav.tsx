@@ -26,6 +26,7 @@ export default function DashboardNav() {
     { href: '/dashboard/activity', label: 'Audit Trail' },
     { href: '/dashboard/payments', label: 'Payments' },
     { href: '/dashboard/ai-activity', label: 'AI Activity' },
+    { href: '/dashboard/growth', label: 'Growth' },
   ]
 
   return (

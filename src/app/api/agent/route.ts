@@ -2,6 +2,7 @@ import { runCommerceAgent } from '@/services/commerceAgent'
 import { validateAgentRequest } from '@/services/agentRequest'
 import { agentSessionStore } from '@/services/agentSession'
 import { auditAgentAction } from '@/services/agentTools'
+import { resolveAuditMerchantId } from '@/services/auditService'
 import { cookies } from 'next/headers'
 
 export const runtime = 'nodejs'
@@ -124,8 +125,9 @@ export async function POST(request: Request) {
     }
     const sessionId = await getSessionId()
     agentSessionStore.updateCart(sessionId, body.cart)
-    await auditAgentAction('Customer agent conversation requested', { messageCount: body.messages.length, cartItemCount: body.cart.length })
-    const result = await runCommerceAgent(body.messages, { cart: body.cart, confirmed: false, checkoutKey: agentSessionStore.checkoutKey(sessionId) })
+    const merchantId = await resolveAuditMerchantId({ productIds: body.cart.map((item) => item.productId) })
+    await auditAgentAction('Customer agent conversation requested', { event: 'conversation', messageCount: body.messages.length, cartItemCount: body.cart.length, productIds: body.cart.map((item) => item.productId) }, undefined, merchantId)
+    const result = await runCommerceAgent(body.messages, { cart: body.cart, confirmed: false, checkoutKey: agentSessionStore.checkoutKey(sessionId), merchantId })
     return Response.json(result)
   } catch (error: unknown) {
     console.error('Gemini assistant request failed', getSafeErrorDetails(error))

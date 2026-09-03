@@ -8,6 +8,41 @@ export function merchantOwnsAuditLog(log: { merchantId: string }, merchantId: st
   return log.merchantId === merchantId
 }
 
+export async function resolveAuditMerchantId(input: {
+  merchantId?: string
+  orderId?: string
+  productIds?: string[]
+}) {
+  const hasCommerceObject = Boolean(input.orderId || input.productIds?.some(Boolean))
+  try {
+    if (input.orderId) {
+      const order = await prisma.order.findUnique({ where: { id: input.orderId }, select: { merchantId: true } })
+      if (order) return order.merchantId
+      return undefined
+    }
+
+    const productIds = [...new Set((input.productIds ?? []).filter(Boolean))]
+    if (productIds.length > 0) {
+      const singleProduct = productIds.length === 1
+        ? await prisma.product.findUnique({ where: { id: productIds[0] }, select: { merchantId: true } })
+        : null
+      const products = singleProduct
+        ? [singleProduct]
+        : productIds.length > 1
+          ? await prisma.product.findMany({ where: { id: { in: productIds } }, select: { merchantId: true } })
+          : []
+      const merchantIds = [...new Set(products.map((product) => product.merchantId))]
+      if (merchantIds.length === 1) return merchantIds[0]
+      return undefined
+    }
+  } catch {
+    // Auditing must never make the customer-facing agent fail.
+    if (hasCommerceObject) return undefined
+  }
+
+  return input.merchantId
+}
+
 export async function getAuditLogsByMerchant(merchantId: string) {
   return prisma.auditLog.findMany({
     where: merchantAuditWhere(merchantId),

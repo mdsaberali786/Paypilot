@@ -1,8 +1,9 @@
 import { prisma } from '@/lib/prisma'
 import { createCustomerOrder } from '@/services/checkoutService'
+import { resolveAuditMerchantId } from '@/services/auditService'
 
 export type AgentCartItem = { productId: string; quantity: number }
-export type AgentContext = { cart: AgentCartItem[]; confirmed: boolean; checkoutKey: string; buyerId?: string }
+export type AgentContext = { cart: AgentCartItem[]; confirmed: boolean; checkoutKey: string; buyerId?: string; merchantId?: string }
 export type AgentAction = { tool: string; status: 'success' | 'blocked'; data?: unknown; message?: string }
 
 export const allowedAgentTools = new Set(['search_products', 'get_product_details', 'check_inventory', 'add_to_cart', 'calculate_cart', 'create_order'])
@@ -15,10 +16,17 @@ export function validateAgentToolArguments(name: string, args: Record<string, un
   return null
 }
 
-export async function auditAgentAction(reason: string, metadata: object, orderId?: string) {
+export async function auditAgentAction(reason: string, metadata: object, orderId?: string, merchantId?: string) {
   try {
-    const merchant = await prisma.merchant.findFirst({ select: { id: true } })
-    if (merchant) await prisma.auditLog.create({ data: { merchantId: merchant.id, orderId, action: 'AGENT_DECISION', reason, metadata } })
+    const metadataRecord = metadata as Record<string, unknown>
+    const productIds = [
+      ...(typeof metadataRecord.productId === 'string' ? [metadataRecord.productId] : []),
+      ...(Array.isArray(metadataRecord.productIds) ? metadataRecord.productIds.filter((id): id is string => typeof id === 'string') : []),
+    ]
+    const resolvedMerchantId = await resolveAuditMerchantId({ merchantId, orderId, productIds })
+    if (resolvedMerchantId) {
+      await prisma.auditLog.create({ data: { merchantId: resolvedMerchantId, orderId, action: 'AGENT_DECISION', reason, metadata } })
+    }
   } catch (error) {
     console.error('Agent audit logging failed', error)
   }
@@ -34,14 +42,14 @@ export const agentToolDefinitions = [
 ]
 
 export async function executeAgentTool(name: string, args: Record<string, unknown>, context: AgentContext): Promise<AgentAction> {
+  const productId = args.productId
   try {
+    const quantity = args.quantity
     const validationError = validateAgentToolArguments(name, args)
     if (validationError) {
-      await auditAgentAction('Blocked agent tool call', { tool: name, reason: validationError })
+      await auditAgentAction('Blocked agent tool call', { tool: name, reason: validationError, productId }, undefined, context.merchantId)
       return { tool: name, status: 'blocked', message: validationError }
     }
-    const quantity = args.quantity
-    const productId = args.productId
     const requestedQuantity = typeof quantity === 'number' ? quantity : 0
 
     if (name === 'search_products') {
@@ -49,26 +57,27 @@ export async function executeAgentTool(name: string, args: Record<string, unknow
       const category = typeof args.category === 'string' ? args.category : undefined
       const maximumPrice = typeof args.maximumPrice === 'number' && args.maximumPrice >= 0 ? args.maximumPrice : undefined
       const products = await prisma.product.findMany({ where: { active: true, ...(category ? { category } : {}), ...(maximumPrice !== undefined ? { price: { lte: maximumPrice } } : {}), OR: [{ name: { contains: query, mode: 'insensitive' } }, { description: { contains: query, mode: 'insensitive' } }, { category: { contains: query, mode: 'insensitive' } }] }, take: 8, select: { id: true, name: true, description: true, price: true, currency: true, category: true, inventory: true, imageUrl: true } })
-      await auditAgentAction('Agent product search', { query, category, maximumPrice, resultCount: products.length })
-      if (products.length > 0) await auditAgentAction('Agent product recommendations returned', { query, productIds: products.map((product) => product.id) })
+      await auditAgentAction('Agent product search', { event: 'search', query, category, maximumPrice, resultCount: products.length, productIds: products.map((product) => product.id) }, undefined, context.merchantId)
+      if (products.length > 0) await auditAgentAction('Agent product recommendations returned', { event: 'recommendation', query, productIds: products.map((product) => product.id) }, undefined, context.merchantId)
       return { tool: name, status: 'success', data: products.map((p) => ({ ...p, price: Number(p.price) })) }
     }
     if (name === 'get_product_details') {
       const product = await prisma.product.findUnique({ where: { id: productId as string }, select: { id: true, name: true, description: true, price: true, currency: true, category: true, inventory: true, active: true, imageUrl: true } })
-      if (!product) return { tool: name, status: 'blocked', message: 'Product not found.' }
+      if (!product) { await auditAgentAction('Blocked product details request', { productId }, undefined, context.merchantId); return { tool: name, status: 'blocked', message: 'Product not found.' } }
+      await auditAgentAction('Agent product details request', { event: 'product_details', productId }, undefined, context.merchantId)
       return { tool: name, status: 'success', data: { ...product, price: Number(product.price) } }
     }
     if (name === 'check_inventory') {
       const product = await prisma.product.findUnique({ where: { id: productId as string }, select: { id: true, name: true, description: true, category: true, price: true, currency: true, inventory: true, active: true } })
-      if (!product || !product.active) return { tool: name, status: 'blocked', message: 'Product is unavailable.' }
+      if (!product || !product.active) { await auditAgentAction('Blocked inventory check', { event: 'inventory_check', productId, quantity }, undefined, context.merchantId); return { tool: name, status: 'blocked', message: 'Product is unavailable.' } }
       const available = product.inventory >= requestedQuantity
-      await auditAgentAction('Agent inventory check', { productId, quantity, available })
+      await auditAgentAction('Agent inventory check', { event: 'inventory_check', productId, quantity, available }, undefined, context.merchantId)
       return { tool: name, status: 'success', data: { productId, available, inventory: product.inventory } }
     }
     if (name === 'add_to_cart') {
       const product = await prisma.product.findUnique({ where: { id: productId as string }, select: { id: true, name: true, description: true, category: true, price: true, currency: true, inventory: true, active: true } })
-      if (!product || !product.active || product.inventory < requestedQuantity) return { tool: name, status: 'blocked', message: 'Product is unavailable in the requested quantity.' }
-      await auditAgentAction('Agent cart modification', { productId, quantity })
+      if (!product || !product.active || product.inventory < requestedQuantity) { await auditAgentAction('Blocked agent cart modification', { event: 'add_to_cart', productId, quantity }, undefined, context.merchantId); return { tool: name, status: 'blocked', message: 'Product is unavailable in the requested quantity.' } }
+      await auditAgentAction('Agent cart modification', { event: 'add_to_cart', productId, quantity }, undefined, context.merchantId)
       return { tool: name, status: 'success', data: { id: product.id, quantity, name: product.name, description: product.description, category: product.category, price: Number(product.price), currency: product.currency, inventory: product.inventory } }
     }
     if (name === 'calculate_cart') {
@@ -78,21 +87,21 @@ export async function executeAgentTool(name: string, args: Record<string, unknow
       if (items.some((item) => !Number.isInteger(item.quantity) || item.quantity < 1 || item.product!.inventory < item.quantity)) return { tool: name, status: 'blocked', message: 'One or more cart items do not have enough inventory.' }
       if (new Set(items.map((item) => item.product!.currency)).size > 1) return { tool: name, status: 'blocked', message: 'Cart items must use the same currency.' }
       const total = items.reduce((sum, item) => sum + Number(item.product!.price) * item.quantity, 0)
-      await auditAgentAction('Agent cart calculation', { itemCount: items.length, total })
+      await auditAgentAction('Agent cart calculation', { event: 'cart_calculation', itemCount: items.length, total, productIds: context.cart.map((item) => item.productId) }, undefined, context.merchantId)
       return { tool: name, status: 'success', data: { items: items.map((item) => ({ productId: item.product!.id, name: item.product!.name, quantity: item.quantity, price: Number(item.product!.price), currency: item.product!.currency })), total } }
     }
     if (name === 'create_order') {
-      if (!context.confirmed) { await auditAgentAction('Blocked order creation request', { reason: 'missing explicit confirmation' }); return { tool: name, status: 'blocked', message: 'Ask the customer to explicitly confirm before creating an order.' } }
+      if (!context.confirmed) { await auditAgentAction('Blocked order creation request', { event: 'order_blocked', reason: 'missing explicit confirmation', productIds: context.cart.map((item) => item.productId) }, undefined, context.merchantId); return { tool: name, status: 'blocked', message: 'Ask the customer to explicitly confirm before creating an order.' } }
       if (!context.buyerId) return { tool: name, status: 'blocked', message: 'Please sign in before placing an order.' }
       const result = await createCustomerOrder(context.cart, context.checkoutKey, context.buyerId)
-      await auditAgentAction('Agent order creation result', { duplicate: result.duplicate }, result.order.id)
+      await auditAgentAction('Agent order creation result', { event: 'order_created', duplicate: result.duplicate }, result.order.id, context.merchantId)
       return { tool: name, status: 'success', data: { orderId: result.order.id, total: Number(result.order.totalAmount), currency: result.order.currency } }
     }
-    await auditAgentAction('Blocked agent tool call', { tool: name })
+    await auditAgentAction('Blocked agent tool call', { tool: name }, undefined, context.merchantId)
     return { tool: name, status: 'blocked', message: 'Tool is not allowed.' }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Tool execution failed.'
-    await auditAgentAction('Blocked agent tool call', { tool: name, reason: message, safeFailure: true })
+    await auditAgentAction('Blocked agent tool call', { tool: name, reason: message, safeFailure: true, productId }, undefined, context.merchantId)
     return { tool: name, status: 'blocked', message: 'I could not complete that action right now. Please try again.' }
   }
 }

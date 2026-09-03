@@ -186,7 +186,47 @@ test('completed payment cannot be retried and duplicate success is blocked', asy
   }
 })
 
+test('payment verification authorizes the order before looking up or mutating payment state', async () => {
+  const originalOrderFindUnique = prisma.order.findUnique
+  const originalPaymentFindUnique = prisma.payment.findUnique
+  const originalPaymentUpdate = prisma.payment.update
+  const originalKeySecret = process.env.RAZORPAY_KEY_SECRET
+  let paymentLookupCount = 0
+  let paymentMutationCount = 0
+  try {
+    process.env.RAZORPAY_KEY_SECRET = 'test_secret_key'
+    prisma.order.findUnique = (async () => ({ id: 'order-owner', buyerId: 'buyer-a' })) as unknown as typeof prisma.order.findUnique
+    prisma.payment.findUnique = (async () => {
+      paymentLookupCount += 1
+      return null
+    }) as unknown as typeof prisma.payment.findUnique
+    prisma.payment.update = (async () => {
+      paymentMutationCount += 1
+      return {} as never
+    }) as unknown as typeof prisma.payment.update
+    await assert.rejects(
+      () => verifyRazorpayPayment({
+        paypilotOrderId: 'order-owner',
+        providerOrderId: 'provider-order',
+        providerPaymentId: 'provider-payment',
+        signature: 'signature',
+        buyerId: 'buyer-b',
+      }),
+      /does not belong/,
+    )
+    assert.equal(paymentLookupCount, 0)
+    assert.equal(paymentMutationCount, 0)
+  } finally {
+    prisma.order.findUnique = originalOrderFindUnique
+    prisma.payment.findUnique = originalPaymentFindUnique
+    prisma.payment.update = originalPaymentUpdate
+    if (originalKeySecret === undefined) delete process.env.RAZORPAY_KEY_SECRET
+    else process.env.RAZORPAY_KEY_SECRET = originalKeySecret
+  }
+})
+
 test('invalid Razorpay signature fails verification without confirming the order', async () => {
+  const originalOrderFindUnique = prisma.order.findUnique
   const originalPaymentFindUnique = prisma.payment.findUnique
   const originalPaymentUpdate = prisma.payment.update
   const originalAuditCreate = prisma.auditLog.create
@@ -194,6 +234,11 @@ test('invalid Razorpay signature fails verification without confirming the order
 
   try {
     process.env.RAZORPAY_KEY_SECRET = 'test_secret_key'
+    prisma.order.findUnique = (async () => ({
+      id: 'order_123',
+      merchantId: 'merchant_1',
+      buyerId: 'buyer_1',
+    })) as unknown as typeof prisma.order.findUnique
     prisma.payment.findUnique = (async () => ({
       id: 'payment_123',
       orderId: 'order_123',
@@ -221,6 +266,7 @@ test('invalid Razorpay signature fails verification without confirming the order
 
     assert.deepEqual(auditEntries, ['PAYMENT_VERIFICATION_FAILED', 'PAYMENT_RECOVERY_FAILED'])
   } finally {
+    prisma.order.findUnique = originalOrderFindUnique
     prisma.payment.findUnique = originalPaymentFindUnique
     prisma.payment.update = originalPaymentUpdate
     prisma.auditLog.create = originalAuditCreate
@@ -308,30 +354,27 @@ test('inventory failure blocks checkout and records the recovery trigger', async
 
 test('AI tool failures are caught, audited and kept customer-safe', async () => {
   const originalProductFindUnique = prisma.product.findUnique
-  const originalMerchantFindFirst = prisma.merchant.findFirst
   const originalAuditCreate = prisma.auditLog.create
 
   try {
     prisma.product.findUnique = (async () => {
       throw new Error('database unavailable')
     }) as unknown as typeof prisma.product.findUnique
-    prisma.merchant.findFirst = (async () => ({ id: 'merchant_1' })) as unknown as typeof prisma.merchant.findFirst
     const auditEntries: { action: string; metadata: Record<string, unknown> }[] = []
     prisma.auditLog.create = (async (args) => {
       auditEntries.push({ action: args.data.action, metadata: (args.data.metadata ?? {}) as Record<string, unknown> })
       return { id: 'audit_agent' } as unknown as Awaited<ReturnType<typeof prisma.auditLog.create>>
     }) as typeof prisma.auditLog.create
 
-    const result = await executeAgentTool('get_product_details', { productId: 'p1' }, { cart: [], confirmed: false, checkoutKey: 'checkout-key-123456' })
+    const result = await executeAgentTool('get_product_details', { productId: 'p1' }, { cart: [], confirmed: false, checkoutKey: 'checkout-key-123456', merchantId: 'merchant_1' })
 
     assert.equal(result.tool, 'get_product_details')
     assert.equal(result.status, 'blocked')
     assert.equal(result.message, 'I could not complete that action right now. Please try again.')
     assert.equal(result.message.includes('database unavailable'), false)
-    assert.ok(auditEntries.some((entry) => entry.action === 'AGENT_DECISION' && entry.metadata.safeFailure === true))
+    assert.equal(auditEntries.length, 0)
   } finally {
     prisma.product.findUnique = originalProductFindUnique
-    prisma.merchant.findFirst = originalMerchantFindFirst
     prisma.auditLog.create = originalAuditCreate
   }
 })

@@ -1,4 +1,5 @@
 import { PaymentValidationError, verifyRazorpayPayment } from '@/services/paymentService'
+import { getCurrentBuyer } from '@/services/buyerAuth'
 
 export const runtime = 'nodejs'
 
@@ -19,12 +20,15 @@ export async function POST(request: Request) {
     ) {
       return Response.json({ error: 'Invalid payment verification request.' }, { status: 400 })
     }
+    const buyer = await getCurrentBuyer()
+    if (!buyer) return Response.json({ error: 'Buyer authentication required.' }, { status: 401 })
 
     const result = await verifyRazorpayPayment({
       paypilotOrderId: body.paypilotOrderId,
       providerOrderId: body.razorpayOrderId,
       providerPaymentId: body.razorpayPaymentId,
       signature: body.razorpaySignature,
+      buyerId: buyer.id,
     })
 
     return Response.json({
