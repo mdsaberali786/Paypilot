@@ -50,12 +50,27 @@ model Merchant {
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
+  passwordHash String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   products  Product[]
   orders    Order[]
   auditLogs AuditLog[]
+  sessions  SellerSession[]
+}
+
+model SellerSession {
+  id        String   @id @default(cuid())
+  merchantId String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([expiresAt])
 }
 
 model Buyer {

@@ -1,12 +1,14 @@
 import { prisma } from '@/lib/prisma'
 import DashboardLayout from '@/components/dashboard/DashboardLayout'
 import ProductsManager from '@/components/dashboard/ProductsManager'
+import { requireSeller } from '@/services/sellerAuth'
 
 export const dynamic = 'force-dynamic'
 
 async function getMerchantProducts() {
+  const seller = await requireSeller()
   const merchant = await prisma.merchant.findFirst({
-    where: { email: 'demo@paypilot.com' },
+    where: { id: seller.id },
     include: {
       products: {
         orderBy: { createdAt: 'desc' },

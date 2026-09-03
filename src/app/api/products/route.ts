@@ -1,7 +1,7 @@
 import { del, put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 import { createProduct } from '@/services/productService'
-import { prisma } from '@/lib/prisma'
+import { getCurrentSeller } from '@/services/sellerAuth'
 
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
@@ -11,6 +11,8 @@ function fieldText(value: FormDataEntryValue | null) {
 }
 
 export async function POST(request: Request) {
+  const merchant = await getCurrentSeller()
+  if (!merchant) return NextResponse.json({ error: 'Seller authentication required.' }, { status: 401 })
   const formData = await request.formData()
   const image = formData.get('image')
   const name = fieldText(formData.get('name'))
@@ -34,9 +36,6 @@ export async function POST(request: Request) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json({ error: 'Image storage is not configured on the server.' }, { status: 503 })
   }
-
-  const merchant = await prisma.merchant.findUnique({ where: { email: 'demo@paypilot.com' }, select: { id: true } })
-  if (!merchant) return NextResponse.json({ error: 'Demo merchant was not found.' }, { status: 404 })
 
   let imageUrl: string | undefined
   try {

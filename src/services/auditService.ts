@@ -1,8 +1,16 @@
 import { prisma } from '@/lib/prisma'
 
+export function merchantAuditWhere(merchantId: string) {
+  return { merchantId }
+}
+
+export function merchantOwnsAuditLog(log: { merchantId: string }, merchantId: string) {
+  return log.merchantId === merchantId
+}
+
 export async function getAuditLogsByMerchant(merchantId: string) {
   return prisma.auditLog.findMany({
-    where: { merchantId },
+    where: merchantAuditWhere(merchantId),
     include: {
       order: {
         include: {
@@ -12,6 +20,15 @@ export async function getAuditLogsByMerchant(merchantId: string) {
     },
     orderBy: { createdAt: 'desc' },
     take: 50,
+  })
+}
+
+export async function getAiActivityByMerchant(merchantId: string) {
+  return prisma.auditLog.findMany({
+    where: merchantAuditWhere(merchantId),
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+    select: { id: true, action: true, reason: true, metadata: true, orderId: true, createdAt: true },
   })
 }
 

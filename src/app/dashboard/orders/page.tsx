@@ -1,25 +1,12 @@
-import { prisma } from '@/lib/prisma'
 import DashboardLayout from '@/components/dashboard/DashboardLayout'
+import { requireSeller } from '@/services/sellerAuth'
+import { getOrdersByMerchant } from '@/services/orderService'
 
 export const dynamic = 'force-dynamic'
 
 async function getMerchantOrders() {
-  const merchant = await prisma.merchant.findFirst({
-    where: { email: 'demo@paypilot.com' },
-    include: {
-      orders: {
-        include: {
-          orderItems: {
-            include: { product: true },
-          },
-          payments: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      },
-    },
-  })
-
-  return merchant?.orders || []
+  const seller = await requireSeller()
+  return getOrdersByMerchant(seller.id)
 }
 
 const statusColors: Record<string, string> = {

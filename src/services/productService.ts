@@ -1,5 +1,13 @@
 import { prisma } from '@/lib/prisma'
 
+export function merchantOwnsProduct(product: { merchantId: string }, merchantId: string) {
+  return product.merchantId === merchantId
+}
+
+export function merchantProductWhere(productId: string, merchantId: string) {
+  return { id: productId, merchantId }
+}
+
 export async function getActiveProducts() {
   return prisma.product.findMany({
     where: { active: true },
@@ -25,6 +33,13 @@ export async function getMerchantProducts(merchantId: string) {
   return prisma.product.findMany({
     where: { merchantId },
     orderBy: { createdAt: 'desc' },
+  })
+}
+
+export async function getMerchantProductById(productId: string, merchantId: string) {
+  return prisma.product.findFirst({
+    where: merchantProductWhere(productId, merchantId),
+    include: { merchant: true },
   })
 }
 

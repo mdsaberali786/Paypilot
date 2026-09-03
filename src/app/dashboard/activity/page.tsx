@@ -1,27 +1,12 @@
-import { prisma } from '@/lib/prisma'
 import DashboardLayout from '@/components/dashboard/DashboardLayout'
+import { requireSeller } from '@/services/sellerAuth'
+import { getAuditLogsByMerchant } from '@/services/auditService'
 
 export const dynamic = 'force-dynamic'
 
 async function getAuditLogs() {
-  const merchant = await prisma.merchant.findFirst({
-    where: { email: 'demo@paypilot.com' },
-    include: {
-      auditLogs: {
-        include: {
-          order: {
-            include: {
-              orderItems: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      },
-    },
-  })
-
-  return merchant?.auditLogs || []
+  const seller = await requireSeller()
+  return getAuditLogsByMerchant(seller.id)
 }
 
 const actionColors: Record<string, string> = {
