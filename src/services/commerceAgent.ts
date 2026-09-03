@@ -1,7 +1,7 @@
 import { GoogleGenAI, type Interactions } from '@google/genai'
 import { agentToolDefinitions, executeAgentTool, type AgentAction, type AgentContext } from './agentTools'
 
-const instructions = `You are PayPilot's commerce assistant. Use tools for every product, price, stock, cart, or order claim. Never invent products, prices, discounts, payment status, or order results. Recommend only returned products. You can only request the declared PayPilot tools; you cannot access databases, secrets, or external systems. When a customer wants to buy, use calculate_cart and tell them to use the secure Review order control shown by PayPilot. Never claim an order was created unless the create_order tool confirms it. Payment is not collected yet.`
+const instructions = `You are PayPilot's commerce assistant. Use tools for every product, price, stock, cart, or order claim. Use search_products only when a product search is actually needed. After receiving sufficient search results, use those returned results to answer the user's request directly. Do not repeat an identical search_products query or call search_products merely to reconfirm results already returned. Only perform another product search when it has materially different criteria or is necessary to satisfy an unresolved part of the user's request. When the available search results satisfy the user's request, stop using tools and provide a concise natural-language answer. Never invent products, prices, discounts, payment status, stock, or order results. Recommend only returned products and base all catalog facts on returned data. You can only request the declared PayPilot tools; you cannot access databases, secrets, or external systems. When a customer wants to buy, use calculate_cart and tell them to use the secure Review order control shown by PayPilot. Never claim an order was created unless the create_order tool confirms it. Payment is not collected yet.`
 
 export type AgentMessage = { role: 'user' | 'assistant'; content: string }
 type LegacyGeminiFunctionCall = { type: 'function_call'; id: string; name: string; arguments: Record<string, unknown> }
@@ -61,12 +61,21 @@ function functionCalls(interaction: GeminiInteraction) {
     : []
 }
 
+export function searchProductsCallKey(name: string, args: Record<string, unknown>) {
+  if (name.trim().toLowerCase() !== 'search_products') return null
+  const query = typeof args.query === 'string' ? args.query.replace(/\s+/g, ' ').trim().toLowerCase() : ''
+  const category = typeof args.category === 'string' ? args.category.replace(/\s+/g, ' ').trim().toLowerCase() : ''
+  const maximumPrice = typeof args.maximumPrice === 'number' ? args.maximumPrice : null
+  return JSON.stringify({ tool: 'search_products', query, category, maximumPrice })
+}
+
 export async function runGeminiToolLoop(client: GeminiInteractionsClient, messages: AgentMessage[], context: AgentContext, executeTool: ToolExecutor = executeAgentTool) {
   const model = process.env.GEMINI_MODEL || 'gemini-3.6-flash'
   console.log('AI_AGENT', { event: 'agent_request_started' })
   console.log('AI_AGENT', { event: 'gemini_request', iteration: 0, hasPreviousInteraction: false })
   let interaction = await client.interactions.create({ model, input: conversationInput(messages), system_instruction: instructions, tools: geminiToolDefinitions })
   const actions: AgentAction[] = []
+  const previousSearchActions = new Map<string, AgentAction>()
   console.log('AI_AGENT', {
     event: 'gemini_response',
     iteration: 0,
@@ -88,8 +97,13 @@ export async function runGeminiToolLoop(client: GeminiInteractionsClient, messag
     for (const call of calls) {
       console.log('AI_AGENT', { event: 'tool_execution_started', iteration, tool: call.name, functionCallId: call.id })
       const args = call.arguments !== null && typeof call.arguments === 'object' && !Array.isArray(call.arguments) ? call.arguments : {}
-      const action = await executeTool(call.name, args, context)
+      const searchKey = searchProductsCallKey(call.name, args)
+      const previousSearchAction = searchKey ? previousSearchActions.get(searchKey) : undefined
+      const action = previousSearchAction
+        ? { tool: call.name, status: 'success' as const, data: previousSearchAction.data, message: 'This search was already performed. Use the previously returned results to answer the user.' }
+        : await executeTool(call.name, args, context)
       actions.push(action)
+      if (searchKey && !previousSearchAction) previousSearchActions.set(searchKey, action)
       console.log('AI_AGENT', { event: 'tool_execution_completed', iteration, tool: call.name, status: action.status })
       results.push({ type: 'function_result', call_id: call.id, name: call.name, result: JSON.stringify(action), is_error: action.status === 'blocked' })
     }

@@ -25,7 +25,7 @@ export async function auditAgentAction(reason: string, metadata: object, orderId
 }
 
 export const agentToolDefinitions = [
-  { type: 'function', name: 'search_products', description: 'Search the live product catalog.', parameters: { type: 'object', properties: { query: { type: 'string' }, category: { type: 'string' }, maximumPrice: { type: 'number' } }, required: ['query'] } },
+  { type: 'function', name: 'search_products', description: 'Search the live product catalog only when needed. Avoid repeating the same query or criteria; use returned results to answer the user, and search again only for materially different criteria or an unresolved need.', parameters: { type: 'object', properties: { query: { type: 'string' }, category: { type: 'string' }, maximumPrice: { type: 'number' } }, required: ['query'] } },
   { type: 'function', name: 'get_product_details', description: 'Get authoritative details for one product.', parameters: { type: 'object', properties: { productId: { type: 'string' } }, required: ['productId'] } },
   { type: 'function', name: 'check_inventory', description: 'Check live inventory for a requested quantity.', parameters: { type: 'object', properties: { productId: { type: 'string' }, quantity: { type: 'integer' } }, required: ['productId', 'quantity'] } },
   { type: 'function', name: 'add_to_cart', description: 'Add a valid in-stock product to the customer cart.', parameters: { type: 'object', properties: { productId: { type: 'string' }, quantity: { type: 'integer' } }, required: ['productId', 'quantity'] } },
