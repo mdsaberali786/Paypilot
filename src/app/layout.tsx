@@ -14,8 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PayPilot",
-  description: "A modern commerce experience",
+  title: "PayPilot — AI Agentic Commerce & Shopping Copilot",
+  description: "PayPilot combines AI-powered shopping with a modern commerce experience, helping customers discover products and helping merchants understand growth opportunities.",
+  metadataBase: new URL("https://paypilot-mu.vercel.app"),
+  alternates: {
+    canonical: "/",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
