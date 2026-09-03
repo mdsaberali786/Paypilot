@@ -13,7 +13,7 @@ export default function Layout({ children, initialAssistantOpen = false }: Layou
       <Header />
       <main className="flex-1">{children}</main>
       <Footer />
-      <AssistantExperience initialOpen={initialAssistantOpen} />
+      <AssistantExperience key={initialAssistantOpen ? 'assistant-open' : 'assistant-closed'} initialOpen={initialAssistantOpen} />
     </div>
   )
 }
