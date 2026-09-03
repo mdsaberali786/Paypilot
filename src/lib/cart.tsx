@@ -10,6 +10,7 @@ export type CartItem = {
   price: number
   currency: string
   inventory: number
+  imageUrl?: string | null
   quantity: number
 }
 

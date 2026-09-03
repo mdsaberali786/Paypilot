@@ -6,8 +6,8 @@ import { useRouter } from 'next/navigation'
 import { formatCurrency } from '@/lib/currency'
 import { useCart } from '@/lib/cart'
 
-type Product = { id: string; name: string; description: string; price: number; currency: string; category: string; inventory: number }
-type CartLine = { productId: string; name: string; quantity: number; price: number; currency: string }
+type Product = { id: string; name: string; description: string; price: number; currency: string; category: string; inventory: number; imageUrl?: string | null }
+type CartLine = { productId: string; name: string; quantity: number; price: number; currency: string; imageUrl?: string | null }
 type AgentAction = { tool: string; status: 'success' | 'blocked'; data?: unknown; message?: string }
 type ChatMessage = { id: string; role: 'user' | 'assistant'; content: string; products?: Product[] }
 type CartSummary = { items: CartLine[]; total: number; currency: string; cartKey: string }
@@ -33,15 +33,16 @@ function isProduct(value: unknown): value is Product {
 }
 
 function cartProduct(product: Product) {
-  return { productId: product.id, name: product.name, price: product.price, currency: product.currency, inventory: product.inventory }
+  return { productId: product.id, name: product.name, price: product.price, currency: product.currency, inventory: product.inventory, imageUrl: product.imageUrl }
 }
 
-export default function AssistantExperience() {
+export default function AssistantExperience({ initialOpen = false }: { initialOpen?: boolean }) {
   const router = useRouter()
   const { items, isReady, itemCount, subtotal, currency, addItem, clearCart } = useCart()
   const [messages, setMessages] = useState<ChatMessage[]>([{ id: 'welcome', role: 'assistant', content: 'Welcome to PayPilot. Tell me what you are shopping for, your budget, or what you need it for.' }])
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [isOpen, setIsOpen] = useState(initialOpen)
   const [activity, setActivity] = useState('')
   const [error, setError] = useState('')
   const [summary, setSummary] = useState<CartSummary | null>(null)
@@ -59,9 +60,9 @@ export default function AssistantExperience() {
     }
   }
 
-  async function sendMessage(event?: FormEvent) {
+  async function sendMessage(event?: FormEvent, prompt?: string) {
     event?.preventDefault()
-    const content = input.trim()
+    const content = (prompt ?? input).trim()
     if (!content || isSending || !isReady) return
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content }
     const outgoing = [...messages, userMessage]
@@ -123,33 +124,19 @@ export default function AssistantExperience() {
     }
   }
 
-  return <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-950 to-blue-950 px-5 py-5 text-white sm:px-7">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-200">PayPilot Concierge</p>
-        <h1 className="mt-1 text-2xl font-semibold">Shop with a commerce assistant</h1>
-        <p className="mt-1 text-sm text-slate-300">Live catalog, inventory-aware recommendations, and a secure checkout review.</p>
+  return <div className="fixed bottom-5 right-5 z-50 sm:bottom-7 sm:right-7">
+    {isOpen && <section className="mb-3 flex h-[min(72vh,680px)] w-[min(92vw,420px)] flex-col overflow-hidden rounded-3xl border border-white/15 bg-white shadow-2xl shadow-slate-950/30">
+      <div className="flex items-start justify-between bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-900 p-5 text-white">
+        <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">PayPilot AI</p><h2 className="mt-1 text-xl font-semibold">Your shopping copilot</h2><p className="mt-1 text-sm text-blue-100/70">Find something that fits your day.</p></div>
+        <button type="button" onClick={() => setIsOpen(false)} aria-label="Close assistant" className="rounded-full p-2 text-blue-100 hover:bg-white/10">×</button>
       </div>
-      <div className="h-[min(58vh,620px)] space-y-5 overflow-y-auto bg-slate-50 p-4 sm:p-6" aria-live="polite">
-        {messages.map((message) => <div key={message.id} className={message.role === 'user' ? 'ml-auto max-w-[88%]' : 'max-w-[92%]'}>
-          <div className={message.role === 'user' ? 'rounded-2xl rounded-br-md bg-blue-600 px-4 py-3 text-sm leading-6 text-white' : 'rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm'}>{message.content}</div>
-          {message.products && message.products.length > 0 && <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {message.products.map((product) => <article key={product.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium uppercase tracking-wide text-blue-700">{product.category}</p>
-              <h2 className="mt-1 font-semibold text-slate-950">{product.name}</h2>
-              <p className="mt-1 line-clamp-2 text-sm text-slate-600">{product.description}</p>
-              <div className="mt-3 flex items-end justify-between gap-3"><div><p className="font-semibold text-slate-950">{formatCurrency(product.price, product.currency)}</p><p className={product.inventory > 0 ? 'text-xs text-emerald-700' : 'text-xs text-rose-700'}>{product.inventory > 0 ? `${product.inventory} available` : 'Unavailable'}</p></div><button type="button" onClick={() => addItem(cartProduct(product))} disabled={product.inventory < 1} className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">Add to cart</button></div>
-            </article>)}
-          </div>}
-        </div>)}
+      <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 p-4" aria-live="polite">
+        {messages.length === 1 && <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm"><p className="font-medium text-slate-950">Hi! What are you shopping for?</p><div className="mt-3 flex flex-wrap gap-2">{['Find a table under ₹5,000', 'Help me choose', 'Show me popular products'].map((prompt) => <button key={prompt} type="button" onClick={() => void sendMessage(undefined, prompt)} className="rounded-full border border-slate-200 px-3 py-2 text-left text-xs font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50">{prompt}</button>)}</div></div>}
+        {messages.map((message) => <div key={message.id} className={message.role === 'user' ? 'ml-auto max-w-[88%]' : 'max-w-[94%]'}><div className={message.role === 'user' ? 'rounded-2xl rounded-br-md bg-blue-600 px-4 py-3 text-sm leading-6 text-white' : 'rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm'}>{message.content}</div>{message.products && message.products.length > 0 && <div className="mt-3 space-y-3">{message.products.map((product) => <article key={product.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="relative flex aspect-[3/1] items-end overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-cyan-100 p-3">{product.imageUrl && <img src={product.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}<span className="relative rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600">{product.category}</span></div><h3 className="mt-3 font-semibold text-slate-950">{product.name}</h3><div className="mt-2 flex items-center justify-between gap-3"><div><p className="font-semibold text-slate-950">{formatCurrency(product.price, product.currency)}</p><p className="text-xs text-emerald-700">{product.inventory > 0 ? 'Available' : 'Unavailable'}</p></div><button type="button" onClick={() => addItem(cartProduct(product))} disabled={product.inventory < 1} className="rounded-full bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300">Add to cart</button></div></article>)}</div>}</div>)}
         {isSending && <div className="flex items-center gap-2 text-sm text-slate-500"><span className="h-2 w-2 animate-pulse rounded-full bg-blue-600" />{activity}</div>}
       </div>
-      <form onSubmit={sendMessage} className="border-t border-slate-200 p-4 sm:p-5"><div className="flex gap-3"><input value={input} onChange={(event) => setInput(event.target.value)} disabled={isSending || !isReady} maxLength={4000} placeholder="Ask about products, budgets, or what fits your needs" className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none ring-blue-500 placeholder:text-slate-400 focus:ring-2 disabled:bg-slate-100" /><button type="submit" disabled={isSending || !input.trim() || !isReady} className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300">Send</button></div></form>
-    </section>
-    <aside className="space-y-4">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-slate-950">Your cart</p><p className="mt-1 text-sm text-slate-500">{itemCount} {itemCount === 1 ? 'item' : 'items'}</p></div><Link href="/cart" className="text-sm font-semibold text-blue-700 hover:text-blue-800">View cart</Link></div>{items.length === 0 ? <p className="mt-5 text-sm text-slate-500">Recommendations you add here appear in your existing PayPilot cart.</p> : <><div className="mt-5 space-y-3 border-y border-slate-100 py-4">{items.map((item) => <div key={item.productId} className="flex justify-between gap-3 text-sm"><span className="text-slate-700">{item.name} <span className="text-slate-400">× {item.quantity}</span></span><span className="font-medium text-slate-950">{formatCurrency(item.price * item.quantity, item.currency)}</span></div>)}</div><div className="mt-4 flex justify-between font-semibold text-slate-950"><span>Estimated total</span><span>{formatCurrency(subtotal, currency)}</span></div><button type="button" onClick={reviewOrder} disabled={isReviewing} className="mt-5 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-400">{isReviewing ? 'Reviewing live cart…' : 'Review order securely'}</button></>}</section>
-      {summary?.cartKey === cartKey && <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-blue-800">Ready for confirmation</p><h2 className="mt-1 font-semibold text-slate-950">You&apos;re about to place this order</h2><div className="mt-4 space-y-2">{summary.items.map((item) => <div key={item.productId} className="flex justify-between gap-3 text-sm text-slate-700"><span>{item.name} × {item.quantity}</span><span>{formatCurrency(item.price * item.quantity, item.currency)}</span></div>)}</div><div className="mt-4 flex justify-between border-t border-blue-200 pt-4 font-semibold text-slate-950"><span>Server-verified total</span><span>{formatCurrency(summary.total, summary.currency)}</span></div><p className="mt-3 text-xs leading-5 text-slate-600">Changes to your cart require a new review. Payment is collected later.</p><button type="button" onClick={confirmOrder} disabled={isConfirming} className="mt-4 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300">{isConfirming ? 'Placing secure order…' : 'Yes, place this order'}</button></section>}
-      {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
-    </aside>
+      <div className="border-t border-slate-200 bg-white p-3"><div className="mb-3 flex items-center justify-between text-xs text-slate-500"><span>{itemCount} {itemCount === 1 ? 'item' : 'items'} · {formatCurrency(subtotal, currency)}</span><Link href="/cart" className="font-semibold text-blue-700 hover:text-blue-800">View cart</Link></div>{items.length > 0 && <button type="button" onClick={reviewOrder} disabled={isReviewing} className="mb-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:bg-blue-50 disabled:opacity-50">{isReviewing ? 'Reviewing live cart…' : 'Review order securely'}</button>}{summary?.cartKey === cartKey && <div className="mb-3 rounded-xl bg-blue-50 p-3 text-xs text-slate-700"><p className="font-semibold text-slate-950">Server-verified total: {formatCurrency(summary.total, summary.currency)}</p><button type="button" onClick={confirmOrder} disabled={isConfirming} className="mt-2 w-full rounded-lg bg-blue-600 px-3 py-2 font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300">{isConfirming ? 'Placing secure order…' : 'Yes, place this order'}</button></div>}{error && <p role="alert" className="mb-3 rounded-xl bg-rose-50 p-3 text-xs text-rose-800">{error}</p>}<form onSubmit={sendMessage} className="flex gap-2"><input value={input} onChange={(event) => setInput(event.target.value)} disabled={isSending || !isReady} maxLength={4000} placeholder="Ask about products..." className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100" /><button type="submit" disabled={isSending || !input.trim() || !isReady} className="rounded-xl bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300">Send</button></form></div>
+    </section>}
+    <button type="button" onClick={() => setIsOpen((open) => !open)} aria-label="Open PayPilot AI shopping assistant" className="ml-auto flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-950 shadow-xl shadow-slate-950/25 ring-1 ring-slate-200 hover:-translate-y-1 hover:bg-cyan-50"><span className="text-lg">✦</span><span>PayPilot AI</span></button>
   </div>
 }

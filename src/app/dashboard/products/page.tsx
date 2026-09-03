@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import DashboardLayout from '@/components/dashboard/DashboardLayout'
+import ProductsManager from '@/components/dashboard/ProductsManager'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,15 +25,12 @@ export default async function ProductsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Products</h1>
-            <p className="mt-2 text-gray-600">Manage your product catalog</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Catalog</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Products</h1>
+            <p className="mt-2 text-slate-500">Manage your product catalog</p>
           </div>
-          <button className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
-            Add Product
-          </button>
         </div>
-
-        <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+        <ProductsManager><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -69,7 +67,8 @@ export default async function ProductsPage() {
                     <tr key={product.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <div className="flex items-center">
-                          <div>
+                          {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" /> : <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-100 to-cyan-100 text-sm font-bold text-blue-700">{product.name.slice(0, 1)}</div>}
+                          <div className="ml-3">
                             <div className="font-medium text-gray-900">{product.name}</div>
                             <div className="text-sm text-gray-500 line-clamp-1">{product.description}</div>
                           </div>
@@ -102,7 +101,7 @@ export default async function ProductsPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </div></ProductsManager>
       </div>
     </DashboardLayout>
   )

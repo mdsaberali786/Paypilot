@@ -63,6 +63,7 @@ model Product {
   merchantId  String
   name        String
   description String
+  imageUrl    String?
   price       Decimal  @db.Decimal(10, 2)
   currency    String   @default("INR")
   category    String

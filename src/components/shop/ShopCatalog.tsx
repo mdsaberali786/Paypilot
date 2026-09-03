@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import ProductCard from './ProductCard'
 
-type Product = { id: string; name: string; description: string; price: number; currency: string; category: string; inventory: number }
+type Product = { id: string; name: string; description: string; price: number; currency: string; category: string; inventory: number; imageUrl?: string | null }
 
 export default function ShopCatalog({ products }: { products: Product[] }) {
   const [query, setQuery] = useState('')

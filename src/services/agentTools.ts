@@ -48,13 +48,13 @@ export async function executeAgentTool(name: string, args: Record<string, unknow
       const query = typeof args.query === 'string' ? args.query.trim() : ''
       const category = typeof args.category === 'string' ? args.category : undefined
       const maximumPrice = typeof args.maximumPrice === 'number' && args.maximumPrice >= 0 ? args.maximumPrice : undefined
-      const products = await prisma.product.findMany({ where: { active: true, ...(category ? { category } : {}), ...(maximumPrice !== undefined ? { price: { lte: maximumPrice } } : {}), OR: [{ name: { contains: query, mode: 'insensitive' } }, { description: { contains: query, mode: 'insensitive' } }, { category: { contains: query, mode: 'insensitive' } }] }, take: 8, select: { id: true, name: true, description: true, price: true, currency: true, category: true, inventory: true } })
+      const products = await prisma.product.findMany({ where: { active: true, ...(category ? { category } : {}), ...(maximumPrice !== undefined ? { price: { lte: maximumPrice } } : {}), OR: [{ name: { contains: query, mode: 'insensitive' } }, { description: { contains: query, mode: 'insensitive' } }, { category: { contains: query, mode: 'insensitive' } }] }, take: 8, select: { id: true, name: true, description: true, price: true, currency: true, category: true, inventory: true, imageUrl: true } })
       await auditAgentAction('Agent product search', { query, category, maximumPrice, resultCount: products.length })
       if (products.length > 0) await auditAgentAction('Agent product recommendations returned', { query, productIds: products.map((product) => product.id) })
       return { tool: name, status: 'success', data: products.map((p) => ({ ...p, price: Number(p.price) })) }
     }
     if (name === 'get_product_details') {
-      const product = await prisma.product.findUnique({ where: { id: productId as string }, select: { id: true, name: true, description: true, price: true, currency: true, category: true, inventory: true, active: true } })
+      const product = await prisma.product.findUnique({ where: { id: productId as string }, select: { id: true, name: true, description: true, price: true, currency: true, category: true, inventory: true, active: true, imageUrl: true } })
       if (!product) return { tool: name, status: 'blocked', message: 'Product not found.' }
       return { tool: name, status: 'success', data: { ...product, price: Number(product.price) } }
     }

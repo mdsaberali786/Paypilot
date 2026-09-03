@@ -1,0 +1,8 @@
+'use client'
+
+import Link from 'next/link'
+import Layout from '@/components/layout/Layout'
+
+export default function SellerLoginPage() {
+  return <Layout><main className="mx-auto flex max-w-5xl justify-center px-4 py-16 sm:px-6"><section className="w-full max-w-md rounded-3xl border border-blue-200/20 bg-gradient-to-br from-blue-950 to-slate-950 p-7 shadow-2xl sm:p-9"><p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-300">Seller console</p><h1 className="mt-4 text-3xl font-semibold text-white">Run your store with clarity.</h1><p className="mt-2 text-sm leading-6 text-slate-400">Merchant authentication will connect here in Phase B.</p><div className="mt-8 space-y-4"><label className="block text-sm font-medium text-slate-300">Work email<input type="email" disabled placeholder="merchant@company.com" className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/50 px-4 py-3 text-white placeholder:text-slate-600" /></label><label className="block text-sm font-medium text-slate-300">Password<input type="password" disabled placeholder="••••••••" className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/50 px-4 py-3 text-white placeholder:text-slate-600" /></label><button type="button" disabled className="w-full rounded-xl bg-blue-300/30 px-4 py-3 font-semibold text-blue-100">Authentication coming in Phase B</button></div><p className="mt-6 text-center text-xs leading-5 text-slate-500">No credentials are collected or submitted in this UI-only phase.</p><Link href="/dashboard" className="mt-5 block text-center text-sm font-semibold text-blue-300 hover:text-white">Preview seller dashboard →</Link></section></main></Layout>
+}

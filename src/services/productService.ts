@@ -27,3 +27,25 @@ export async function getMerchantProducts(merchantId: string) {
     orderBy: { createdAt: 'desc' },
   })
 }
+
+export async function createProduct(input: {
+  merchantId: string
+  name: string
+  description: string
+  category: string
+  price: number
+  inventory: number
+  imageUrl?: string | null
+}) {
+  return prisma.product.create({
+    data: {
+      merchantId: input.merchantId,
+      name: input.name,
+      description: input.description,
+      category: input.category,
+      price: input.price,
+      inventory: input.inventory,
+      imageUrl: input.imageUrl ?? null,
+    },
+  })
+}
