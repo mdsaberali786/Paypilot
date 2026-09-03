@@ -22,6 +22,7 @@ export default function CheckoutPage() {
     try {
       const response = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ checkoutKey: checkoutKey.current, items: items.map(({ productId, quantity }) => ({ productId, quantity })) }) })
       const result = await response.json() as { orderId?: string; error?: string }
+      if (response.status === 401) { router.push('/buyer/login?next=/checkout'); return }
       if (!response.ok || !result.orderId) throw new Error(result.error || 'Unable to create your order.')
       clearCart()
       router.push(`/order/${result.orderId}`)

@@ -5,6 +5,7 @@ import { formatCurrency } from '@/lib/currency'
 import { getOrderById } from '@/services/orderService'
 import { getPaymentForOrder } from '@/services/paymentService'
 import { createRazorpayOrder } from '@/services/paymentService'
+import { canAccessBuyerOrder, getCurrentBuyer } from '@/services/buyerAuth'
 import OrderPaymentSection from '@/components/payment/OrderPaymentSection'
 
 export const dynamic = 'force-dynamic'
@@ -18,6 +19,8 @@ export default async function OrderConfirmationPage({ params }: { params: Promis
 
   const order = await getOrderById(id)
   if (!order) notFound()
+  const buyer = await getCurrentBuyer()
+  if (!canAccessBuyerOrder(order.buyerId, buyer?.id ?? null)) notFound()
 
   const payment = await getPaymentForOrder(id)
   let paymentInfo: {

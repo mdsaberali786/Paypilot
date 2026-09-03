@@ -17,6 +17,7 @@ import {
   verifyRazorpayPayment,
   handleRazorpayWebhook,
 } from '../src/services/paymentService'
+import { canAccessBuyerOrder, hashPassword, verifyPassword } from '../src/services/buyerAuth'
 
 type MockRazorpayOrders = {
   create: (args?: unknown) => Promise<{ id: string; amount: number; currency: string }>
@@ -25,6 +26,26 @@ type MockRazorpayOrders = {
 type MockRazorpayInstance = {
   orders: MockRazorpayOrders
 }
+
+test('buyer passwords are salted scrypt hashes and verify safely', async () => {
+  const passwordHash = await hashPassword('correct horse battery staple')
+  assert.match(passwordHash, /^scrypt:[^:]+:[a-f0-9]+$/)
+  assert.notEqual(passwordHash, 'correct horse battery staple')
+  assert.equal(await verifyPassword('correct horse battery staple', passwordHash), true)
+  assert.equal(await verifyPassword('wrong password', passwordHash), false)
+})
+
+test('buyer password requirements reject short passwords', async () => {
+  await assert.rejects(() => hashPassword('short'), /at least 8 characters/)
+})
+
+test('buyer order access requires a matching non-legacy authenticated buyer', () => {
+  assert.equal(canAccessBuyerOrder('buyer-a', 'buyer-a'), true)
+  assert.equal(canAccessBuyerOrder('buyer-a', 'buyer-b'), false)
+  assert.equal(canAccessBuyerOrder(null, 'buyer-a'), false)
+  assert.equal(canAccessBuyerOrder('buyer-a', null), false)
+  assert.equal(canAccessBuyerOrder(null, null), false)
+})
 
 type RazorpayPrototype = {
   addResources?: (this: MockRazorpayInstance) => void

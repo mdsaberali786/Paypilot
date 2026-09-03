@@ -1,4 +1,5 @@
 import { CheckoutValidationError, createCustomerOrder, type CheckoutItemInput } from '@/services/checkoutService'
+import { getCurrentBuyer } from '@/services/buyerAuth'
 
 export const runtime = 'nodejs'
 
@@ -10,9 +11,12 @@ export async function POST(request: Request) {
     }
 
     const { items, checkoutKey } = body as { items?: unknown; checkoutKey?: unknown }
+    const buyer = await getCurrentBuyer()
+    if (!buyer) return Response.json({ error: 'Please sign in before placing an order.' }, { status: 401 })
     const result = await createCustomerOrder(
       Array.isArray(items) ? items as CheckoutItemInput[] : [],
       typeof checkoutKey === 'string' ? checkoutKey : '',
+      buyer.id,
     )
     return Response.json({ orderId: result.order.id, duplicate: result.duplicate }, { status: result.duplicate ? 200 : 201 })
   } catch (error) {

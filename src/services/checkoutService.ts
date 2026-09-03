@@ -30,7 +30,7 @@ function normaliseItems(items: CheckoutItemInput[]) {
   return [...quantities].map(([productId, quantity]) => ({ productId, quantity }))
 }
 
-export async function createCustomerOrder(items: CheckoutItemInput[], checkoutKey: string) {
+export async function createCustomerOrder(items: CheckoutItemInput[], checkoutKey: string, buyerId?: string) {
   const normalisedItems = normaliseItems(items)
   if (typeof checkoutKey !== 'string' || checkoutKey.length < 16 || checkoutKey.length > 100) {
     throw new CheckoutValidationError('Invalid checkout request. Please try again.')
@@ -80,6 +80,7 @@ export async function createCustomerOrder(items: CheckoutItemInput[], checkoutKe
                 requestedQuantity: item.quantity,
                 availableInventory: product?.inventory ?? 0,
                 checkoutKey,
+                buyerId,
               },
             },
           })
@@ -95,6 +96,7 @@ export async function createCustomerOrder(items: CheckoutItemInput[], checkoutKe
         data: {
           merchantId,
           checkoutKey,
+          buyerId,
           status: 'PENDING',
           totalAmount,
           currency,

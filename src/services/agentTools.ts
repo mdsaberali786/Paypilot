@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { createCustomerOrder } from '@/services/checkoutService'
 
 export type AgentCartItem = { productId: string; quantity: number }
-export type AgentContext = { cart: AgentCartItem[]; confirmed: boolean; checkoutKey: string }
+export type AgentContext = { cart: AgentCartItem[]; confirmed: boolean; checkoutKey: string; buyerId?: string }
 export type AgentAction = { tool: string; status: 'success' | 'blocked'; data?: unknown; message?: string }
 
 export const allowedAgentTools = new Set(['search_products', 'get_product_details', 'check_inventory', 'add_to_cart', 'calculate_cart', 'create_order'])
@@ -83,7 +83,8 @@ export async function executeAgentTool(name: string, args: Record<string, unknow
     }
     if (name === 'create_order') {
       if (!context.confirmed) { await auditAgentAction('Blocked order creation request', { reason: 'missing explicit confirmation' }); return { tool: name, status: 'blocked', message: 'Ask the customer to explicitly confirm before creating an order.' } }
-      const result = await createCustomerOrder(context.cart, context.checkoutKey)
+      if (!context.buyerId) return { tool: name, status: 'blocked', message: 'Please sign in before placing an order.' }
+      const result = await createCustomerOrder(context.cart, context.checkoutKey, context.buyerId)
       await auditAgentAction('Agent order creation result', { duplicate: result.duplicate }, result.order.id)
       return { tool: name, status: 'success', data: { orderId: result.order.id, total: Number(result.order.totalAmount), currency: result.order.currency } }
     }

@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { validateAgentRequest } from '@/services/agentRequest'
 import { agentSessionStore } from '@/services/agentSession'
 import { auditAgentAction, executeAgentTool } from '@/services/agentTools'
+import { getCurrentBuyer } from '@/services/buyerAuth'
 
 export const runtime = 'nodejs'
 
@@ -40,8 +41,10 @@ export async function POST(request: Request) {
       await auditAgentAction('Blocked agent order confirmation', { reason: 'missing or stale checkout review' })
       return Response.json({ error: 'Review the current order before confirming it. Changes to your cart require a new review.' }, { status: 409 })
     }
+    const buyer = await getCurrentBuyer()
+    if (!buyer) return Response.json({ error: 'Please sign in before placing an order.' }, { status: 401 })
     await auditAgentAction('Customer explicitly confirmed agent checkout', { itemCount: validated.cart.length })
-    const order = await executeAgentTool('create_order', {}, { ...context, confirmed: true })
+    const order = await executeAgentTool('create_order', {}, { ...context, confirmed: true, buyerId: buyer.id })
     agentSessionStore.clearReview(sessionId)
     return Response.json(order, { status: order.status === 'success' ? 201 : 409 })
   } catch (error) {
